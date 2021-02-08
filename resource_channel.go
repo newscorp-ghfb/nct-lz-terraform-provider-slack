@@ -25,6 +25,12 @@ func resourceChannel() *schema.Resource {
 				ValidateFunc: validation.StringLenBetween(1, 80),
 			},
 
+			"private_channel": &schema.Schema{
+				Type:        schema.TypeBool,
+				Description: "Is the channel private?",
+				Required:    true,
+			},
+
 			"channel_purpose": &schema.Schema{
 				Type:        schema.TypeString,
 				Description: "Sets the purpose for a channel",
@@ -48,18 +54,18 @@ func resourceChannelCreate(d *schema.ResourceData, meta interface{}) error {
 	api := slack.New(meta.(*Config).APIToken)
 
 	// Create Slack Channel
-	channel, err := api.CreateChannel(d.Get("channel_name").(string))
+	channel, err := api.CreateConversation(d.Get("channel_name").(string), d.Get("private_channel").(bool))
 	if err != nil {
 		return err
 	}
 	d.SetId(channel.ID)
 
 	// Update Slack Channel Purpose
-	if _, err := api.SetChannelPurpose(d.Id(), d.Get("channel_purpose").(string)); err != nil {
+	if _, err := api.SetPurposeOfConversation(d.Id(), d.Get("channel_purpose").(string)); err != nil {
 		return err
 	}
 	// Create Slack Channel Topic
-	if _, err := api.SetChannelTopic(channel.ID, d.Get("channel_topic").(string)); err != nil {
+	if _, err := api.SetTopicOfConversation(channel.ID, d.Get("channel_topic").(string)); err != nil {
 		return err
 	}
 
@@ -70,7 +76,7 @@ func resourceChannelRead(d *schema.ResourceData, meta interface{}) error {
 	api := slack.New(meta.(*Config).APIToken)
 
 	// Checks if Slack Channel exists, if not remove resource from state
-	_, err := api.GetChannelInfo(d.Id())
+	_, err := api.GetConversationInfo(d.Id(), false)
 	if err != nil {
 		d.SetId("")
 		return nil
@@ -83,15 +89,15 @@ func resourceChannelUpdate(d *schema.ResourceData, meta interface{}) error {
 	api := slack.New(meta.(*Config).APIToken)
 
 	name := d.Get("channel_name").(string)
-	if _, err := api.RenameChannel(d.Id(), name); err != nil {
+	if _, err := api.RenameConversation(d.Id(), name); err != nil {
 		return err
 	}
 	// Update Slack Channel Purpose
-	if _, err := api.SetChannelPurpose(d.Id(), d.Get("channel_purpose").(string)); err != nil {
+	if _, err := api.SetPurposeOfConversation(d.Id(), d.Get("channel_purpose").(string)); err != nil {
 		return err
 	}
 	// Update Slack Channel Topic
-	if _, err := api.SetChannelTopic(d.Id(), d.Get("channel_topic").(string)); err != nil {
+	if _, err := api.SetTopicOfConversation(d.Id(), d.Get("channel_topic").(string)); err != nil {
 		return err
 	}
 	return nil
@@ -101,8 +107,8 @@ func resourceChannelDelete(d *schema.ResourceData, meta interface{}) error {
 	api := slack.New(meta.(*Config).APIToken)
 
 	// Deletes Slack Channel and clears state
-	if _, err := api.DeleteChannel(d.Id()); err != nil {
-		return err
+	if _, _, err := api.CloseConversation(d.Id()); err != nil {
+
 	}
 
 	return nil
